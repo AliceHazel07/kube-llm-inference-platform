@@ -33,3 +33,24 @@ class BackendRegistry:
             healthy_backends,
             key=lambda backend: backend.active_requests,
         )
+
+    def increment_active_requests(self, backend_name: str) -> None:
+        with self._lock:
+            backend = self._backends.get(backend_name)
+
+            if backend is None:
+                raise KeyError(f"Backend not found: {backend_name}")
+
+            backend.active_requests += 1
+
+    def decrement_active_requests(self, backend_name: str) -> None:
+        with self._lock:
+            backend = self._backends.get(backend_name)
+
+            if backend is None:
+                raise KeyError(f"Backend not found: {backend_name}")
+
+            backend.active_requests = max(
+                0,
+                backend.active_requests - 1,
+            )

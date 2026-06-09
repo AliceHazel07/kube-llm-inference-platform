@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import AsyncIterator, Any
 
 from fastapi import FastAPI, HTTPException
 
@@ -7,6 +7,10 @@ from gateway.app.backend_registry import Backend, BackendRegistry
 from gateway.app.models import (
     BackendStatus,
     ChatCompletionRequest,
+)
+from gateway.app.proxy import (
+    BackendRequestError,
+    forward_chat_completion,
 )
 
 
@@ -18,13 +22,13 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     registry.register(
         Backend(
             name="mock-vllm-1",
-            base_url="http://localhost:8001",
+            base_url="http://127.0.0.1:8001",
         )
     )
     registry.register(
         Backend(
             name="mock-vllm-2",
-            base_url="http://localhost:8002",
+            base_url="http://127.0.0.1:8002",
         )
     )
     yield
@@ -32,7 +36,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="Kubernetes LLM Inference Gateway",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -58,15 +62,28 @@ async def list_backends() -> list[BackendStatus]:
 @app.post("/v1/chat/completions")
 async def create_chat_completion(
     request: ChatCompletionRequest,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     try:
         backend = registry.select_least_loaded()
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=503,
+            detail=str(exc),
+        ) from exc
 
-    return {
-        "model": request.model,
-        "selected_backend": backend.name,
-        "message_count": len(request.messages),
-        "status": "routing_only",
-    }
+    registry.increment_active_requests(backend.name)
+
+    try:
+        return await forward_chat_completion(
+            backend=backend,
+            request=request,
+        )
+
+    except BackendRequestError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc),
+        ) from exc
+
+    finally:
+        registry.decrement_active_requests(backend.name)
