@@ -21,8 +21,29 @@ registration and routing.
 
 ## Run locally
 
+Quick instructions to run the gateway and two mock backends locally using Docker Compose.
+
+Start services:
+
+```bash
+docker compose up --build
 ```
-uv sync
-uv run fastapi dev gateway/app/main.py
+
+This will expose:
+
+- Gateway: http://localhost:8000
+- Mock backend 1: http://localhost:8001
+- Mock backend 2: http://localhost:8002
+
+You can also run services directly with `uvicorn` for development:
+
+```bash
+# Run gateway
+uvicorn gateway.app.main:app --reload --port 8000
+
+# Run mock backend (in separate terminals)
+BACKEND_NAME=mock-vllm-1 uvicorn mock_backend.main:app --reload --port 8001
+BACKEND_NAME=mock-vllm-2 uvicorn mock_backend.main:app --reload --port 8002
 ```
+
 

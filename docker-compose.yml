@@ -1,0 +1,27 @@
+version: "3.8"
+services:
+  gateway:
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mock-vllm-1
+      - mock-vllm-2
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  mock-vllm-1:
+    build: .
+    command: uvicorn mock_backend.main:app --host 0.0.0.0 --port 8001
+    environment:
+      - BACKEND_NAME=mock-vllm-1
+    ports:
+      - "8001:8001"
+
+  mock-vllm-2:
+    build: .
+    command: uvicorn mock_backend.main:app --host 0.0.0.0 --port 8002
+    environment:
+      - BACKEND_NAME=mock-vllm-2
+    ports:
+      - "8002:8002"
